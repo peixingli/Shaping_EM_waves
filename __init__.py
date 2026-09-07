@@ -1,4 +1,5 @@
 from .amortized_optimizer import AmortizedOptimizer, build_optimizer
+from .dataset import build_data_loaders, load_dataset
 from .objectives import (
     HighLowObjective,
     InverseObjective,
@@ -25,7 +26,9 @@ __all__ = [
     "SurrogateLoss",
     "SurrogateTraining",
     "build_optimizer",
+    "build_data_loaders",
     "build_surrogate",
+    "load_dataset",
     "train_amortized_optimizer",
     "train_surrogate",
 ]

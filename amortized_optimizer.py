@@ -6,7 +6,10 @@ from pathlib import Path
 import torch
 import torch.nn as nn
 
-from .objectives import InverseObjective
+if __package__:
+    from .objectives import InverseObjective
+else:
+    from objectives import InverseObjective
 
 
 class VoltageMap(nn.Module):

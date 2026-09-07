@@ -6,6 +6,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+if __package__:
+    from .dataset import frequency_indices
+else:
+    from dataset import frequency_indices
+
 
 class VoltageEncoder(nn.Module):
     def __init__(self):
@@ -29,18 +34,19 @@ class VoltageEncoder(nn.Module):
 
 class CavitySurrogate(nn.Module):
     n_voltages = 23
-    n_frequencies = 101
     n_receivers = 44
 
-    def __init__(self):
+    def __init__(self, n_frequencies=201):
         super().__init__()
+        selected = frequency_indices(n_frequencies)
+        self.n_frequencies = len(selected)
         self.grid_dim = 256
 
         self.branch = VoltageEncoder()
         self.freq_embedding = nn.Embedding(self.n_frequencies, 256)
         self.register_buffer(
             "normalized_frequencies",
-            torch.linspace(-1.0, 1.0, self.n_frequencies).reshape(-1, 1),
+            (torch.tensor(selected, dtype=torch.float32) / 100.0 - 1.0).reshape(-1, 1),
         )
         self.frequency_coordinate_mlp = nn.Sequential(
             nn.Linear(1, 64),
@@ -122,8 +128,9 @@ class CavitySurrogate(nn.Module):
 def build_surrogate(
     checkpoint: str | Path | None = None,
     device: str | torch.device = "cpu",
+    n_frequencies: int = 201,
 ) -> CavitySurrogate:
-    model = CavitySurrogate()
+    model = CavitySurrogate(n_frequencies=n_frequencies)
     if checkpoint is not None:
         try:
             state = torch.load(checkpoint, map_location="cpu", weights_only=True)

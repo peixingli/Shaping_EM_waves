@@ -9,8 +9,12 @@ import torch.nn.functional as F
 from torch.optim.lr_scheduler import LambdaLR
 from torch.utils.data import Dataset
 
-from .amortized_optimizer import AmortizedOptimizer
-from .objectives import InverseObjective
+if __package__:
+    from .amortized_optimizer import AmortizedOptimizer
+    from .objectives import InverseObjective
+else:
+    from amortized_optimizer import AmortizedOptimizer
+    from objectives import InverseObjective
 
 
 @dataclass(frozen=True)
@@ -18,6 +22,7 @@ class SurrogateTraining:
     epochs: int = 20
     learning_rate: float = 5e-4
     warmup_epochs: int = 2
+    alpha: float = 0.5
 
 
 @dataclass(frozen=True)
@@ -30,11 +35,19 @@ class OptimizerTraining:
 
 
 class SurrogateLoss(nn.Module):
+    def __init__(self, alpha=0.5):
+        super().__init__()
+        if not math.isfinite(alpha) or alpha <= 0:
+            raise ValueError("alpha must be finite and positive")
+        self.alpha = alpha
+
     def forward(self, log_prediction, target):
-        peak = target.amax(dim=(1, 2), keepdim=True)
-        target = target.clamp_min(peak * 1e-3)
-        target = target / target.sum(dim=(1, 2), keepdim=True)
-        return F.mse_loss(log_prediction, target.log())
+        log_prediction = F.log_softmax(
+            self.alpha * log_prediction.float().flatten(1), dim=1
+        )
+        target = target.float().flatten(1).pow(self.alpha)
+        target = target / target.sum(dim=1, keepdim=True)
+        return F.kl_div(log_prediction, target, reduction="batchmean")
 
 
 class ObjectiveDataset(Dataset):
@@ -68,7 +81,7 @@ def train_surrogate(
     config=SurrogateTraining(),
 ):
     model.to(device).train().requires_grad_(True)
-    objective = SurrogateLoss()
+    objective = SurrogateLoss(alpha=config.alpha)
     adam = torch.optim.Adam(model.parameters(), lr=config.learning_rate)
     scheduler = _cosine_schedule(adam, config.warmup_epochs, config.epochs)
     history = []
